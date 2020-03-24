@@ -11,17 +11,30 @@ uses
   Tasking in 'Units\Tasking.pas';
 
 var
-  P: TPowerShell;
-  S: TStopwatch;
+  T: TTasks;
+  J: TArray<TTask>;
+  I: Integer;
+
+procedure LogTask(X: TTask);
+Begin
+  Writeln('[Task]  ', X.Name);
+  Writeln(#9, 'Path = ', X.Path);
+  Writeln(#9, 'Enabled = ', BoolToStr(X.Enabled, True));
+  Writeln(#9, 'State = ', X.State);
+  Writeln;
+End;
 
 begin
+  ReportMemoryLeaksOnShutdown := True;
   try
     CoInitialize(Nil);
-    P := TPowerShell.Create;
-    Writeln(P.Get('"Hello"'));
-    //Tasking.Shell := P;
-    Tasks.Exists('Omage');
-    P.Free;
+    T := TTasks.Create;
+    J := T.List;
+    Writeln('There are ', Length(J), ' running tasks.');
+    Writeln;
+    for I := 0 to High(J) do
+      LogTask(J[I]);
+    T.Free;
     CoUninitialize;
   except
     on E: Exception do

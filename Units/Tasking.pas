@@ -4,60 +4,82 @@ interface
 
 uses
   System.SysUtils,
-  PowerShell;
+  ComObj,
+  ActiveX,
+  Variants;
 
 type
-  TTrigger = (trMinute, trHour, trDay, trWeek, trMonth, trLogon, trStartup, trIdle);
 
   TTask = record
-    Name:   String;
-    Desc:   String;
-    Cmd:    String;
-    Param:  String;
-    Dir:    String;
-    Trigger:TTrigger;
+    Name: String;
+    Path: String;
+    Enabled: Boolean;
+    State: Integer;
+    
+    constructor Create(V: OleVariant);
   end;
 
-  Tasks = class
+  TTasks = class
+  private
+    FServ: OleVariant;
   public
-    class function Exists(Name: String): Boolean;
-    class procedure Create;
-    class procedure Remove(Name: String);
-    class function List: TArray<TTask>;
+    constructor Create;
+    destructor Destroy; override;
+    function List: TArray<TTask>;
+    function ListRunning: TArray<TTask>;
   end;
-
-  EShellError  = class(Exception);
-  EAccessError = class(Exception);
-
-var
-  Shell: TPowerShell;
 
 implementation
 
-procedure CheckPS;
+constructor TTask.Create(V: OleVariant);
 begin
-  if Not Assigned(Shell) then
-    raise EShellError.Create('No PowerShell instance was passed to ' + Tasks.UnitName + '.Shell');
+  Name := V.Name;
+  Path := V.Path;
+  Enabled := V.Enabled;
+  State := V.State;
 end;
 
-class function Tasks.Exists(Name: string): Boolean;
+constructor TTasks.Create;
 begin
-  CheckPS;
+  FServ := CreateOleObject('Schedule.Service');
+  FServ.Connect;
 end;
 
-class procedure Tasks.Create;
+destructor TTasks.Destroy;
 begin
-  CheckPS;
+  FServ := Unassigned;
 end;
 
-class procedure Tasks.Remove(Name: string);
+function TTasks.List;
+var
+  L, V: OleVariant;
+  Enum: IEnumVariant;
+  I, S: Cardinal;
 begin
-  CheckPS;
+  S := 0;
+  L := FServ.GetFolder('\').GetTasks(0);
+  SetLength(Result, Cardinal(L.Count));
+  Enum := IUnknown(L._NewEnum) as IEnumVariant;
+  while Enum.Next(1, V, I) = S_OK do Begin
+    Result[S] := TTask.Create(V);
+    Inc(S);  
+  End;
 end;
 
-class function Tasks.List: TArray<TTask>;
+function TTasks.ListRunning;
+var
+  L, V: OleVariant;
+  E: IEnumVariant;
+  I, S: Cardinal;
 begin
-  CheckPS;
+  S := 0;
+  L := FServ.GetRunningTasks(0);
+  SetLength(Result, Cardinal(L.Count));
+  E := IUnknown(L._NewEnum) as IEnumVariant;
+  while E.Next(1, V, I) = S_OK do Begin
+    Result[S] := TTask.Create(V);
+    Inc(S);
+  End;
 end;
 
 end.

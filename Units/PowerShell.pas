@@ -24,25 +24,21 @@ type
   private
     FShell: OleVariant;
     FExec: OleVariant;
-    FErr: Boolean;
-    FNoRes: Boolean;
 
-    function FullCommand(Cmd: String): String;
+    function FullCommand(Cmd: String; NoRes, Err: Boolean): String;
   public
     /// <summary>Creates an instance of PowerShell</summary>
     constructor Create;
     /// <summary>Kills the assigned instance of PowerShell</summary>
     destructor Destroy; override;
-    /// <summary>A property
-    property ReturnErrors: Boolean read FErr write FErr;
     /// <summary>Executes a PowerShell command</summary>
     /// <remarks>Does not wait for the command to finish</remarks>
     procedure Exec(Cmd: String);
     /// <summary>Executes a PowerShell command and return its output</summary>
     /// <returns>Trimmed output of the given PowerShell command</returns>
-    function Get(Cmd: String): String; overload;
+    function Get(Cmd: String; Err: Boolean): String; overload;
     /// <summary>Executes a PowerShell command and return its output line by line using the provided callback</summary>
-    procedure Get(Cmd: String; Call: TStrCallback); overload;
+    procedure Get(Cmd: String; Err: Boolean; Call: TStrCallback); overload;
   end;
 
 implementation
@@ -59,11 +55,11 @@ Begin
   FShell := Unassigned;
 End;
 
-function TPowerShell.FullCommand(Cmd: string): String;
+function TPowerShell.FullCommand(Cmd: string; NoRes, Err: Boolean): String;
 begin
-  if FNoRes then
+  if NoRes then
     Result := Format(CmdJoinNull, [Cmd])
-  else if FErr then
+  else if Err then
     Result := Format(CmdJoinErr, [Cmd, CmdEnd])
   else
     Result := Format(CmdJoin, [Cmd, CmdEnd]);
@@ -71,16 +67,14 @@ end;
 
 procedure TPowerShell.Exec(Cmd: string);
 begin
-  FNoRes := True;
-  FExec.StdIn.WriteLine(FullCommand(Cmd));
-  FNoRes := False;
+  FExec.StdIn.WriteLine(FullCommand(Cmd, True, False));
 end;
 
-function TPowerShell.Get(Cmd: String): String;
+function TPowerShell.Get(Cmd: String; Err: Boolean): String;
 var
   L: String;
 Begin
-  FExec.StdIn.WriteLine(FullCommand(Cmd));
+  FExec.StdIn.WriteLine(FullCommand(Cmd, False, Err));
   Repeat
     L := FExec.StdOut.ReadLine;
   Until L.Contains(CmdEnd);
@@ -92,11 +86,13 @@ Begin
   Result := Result.Trim;
 End;
 
-procedure TPowerShell.Get(Cmd: String; Call: TStrCallback);
+procedure TPowerShell.Get(Cmd: String; Err: Boolean; Call: TStrCallback);
 var
   L: String;
 Begin
-  FExec.StdIn.WriteLine(FullCommand(Cmd));
+  if not Assigned(Call) then
+    raise Exception.Create('Get callback is unassigned');
+  FExec.StdIn.WriteLine(FullCommand(Cmd, False, Err));
   Repeat
     L := FExec.StdOut.ReadLine;
   Until L.Contains(CmdEnd);
